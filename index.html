@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Posición Financiera — Dashboard Pesquera</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+  :root {
+    --navy:    #1B2A4A;
+    --teal:    #0F6E56;
+    --teal-l:  #E1F5EE;
+    --red:     #A32D2D;
+    --red-l:   #FCEBEB;
+    --amber:   #854F0B;
+    --amber-l: #FAEEDA;
+    --gray-h:  #F4F3F0;
+    --gray-m:  #D3D1C7;
+    --gray-d:  #444441;
+    --border:  rgba(0,0,0,0.1);
+    --bg:      #F8F7F4;
+    --bg2:     #FFFFFF;
+    --text:    #1a1a18;
+    --text2:   #5F5E5A;
+    --text3:   #888780;
+    --radius:  10px;
+    --radius-lg: 14px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); font-size: 14px; line-height: 1.5; }
+
+  /* HEADER */
+  .top-bar { background: var(--navy); color: #fff; padding: 0 2rem; display: flex; align-items: center; justify-content: space-between; height: 56px; position: sticky; top: 0; z-index: 100; }
+  .top-bar h1 { font-size: 15px; font-weight: 600; letter-spacing: -0.2px; display: flex; align-items: center; gap: 10px; }
+  .top-bar h1 span { opacity: .5; font-weight: 400; }
+  .top-badges { display: flex; gap: 8px; align-items: center; }
+  .badge { font-size: 11px; padding: 4px 10px; border-radius: 6px; background: rgba(255,255,255,0.12); color: rgba(255,255,255,0.85); }
+  .badge.green { background: #0F6E56; color: #E1F5EE; }
+
+  /* MAIN */
+  .main { max-width: 1200px; margin: 0 auto; padding: 1.5rem 1.5rem 3rem; }
+
+  /* UPLOAD */
+  .upload-zone { border: 1.5px dashed var(--gray-m); border-radius: var(--radius-lg); padding: 2.5rem; text-align: center; cursor: pointer; transition: background .15s, border-color .15s; margin-bottom: 1.5rem; background: var(--bg2); }
+  .upload-zone:hover, .upload-zone.over { background: var(--gray-h); border-color: var(--navy); }
+  .upload-zone .icon { font-size: 40px; margin-bottom: 12px; opacity: .35; }
+  .upload-zone h2 { font-size: 16px; font-weight: 600; color: var(--text); margin-bottom: 6px; }
+  .upload-zone p { font-size: 13px; color: var(--text2); margin-bottom: 16px; }
+  .upload-btn { display: inline-block; font-size: 13px; font-weight: 500; padding: 9px 22px; border-radius: var(--radius); border: 1.5px solid var(--navy); color: var(--navy); cursor: pointer; background: transparent; transition: background .15s; }
+  .upload-btn:hover { background: var(--navy); color: #fff; }
+  .upload-hint { margin-top: 12px; font-size: 11px; color: var(--text3); }
+
+  /* STATUS */
+  .status { display: none; align-items: center; gap: 10px; padding: 10px 14px; border-radius: var(--radius); font-size: 13px; margin-bottom: 1.25rem; }
+  .status.ok   { display: flex; background: var(--teal-l); color: var(--teal); }
+  .status.err  { display: flex; background: var(--red-l); color: var(--red); }
+  .status.load { display: flex; background: var(--amber-l); color: var(--amber); }
+
+  /* BANNER */
+  .banner { background: var(--navy); color: #fff; border-radius: var(--radius-lg); padding: 1.5rem 2rem; margin-bottom: 1.25rem; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1.5rem; }
+  .pos-lbl { font-size: 11px; opacity: .6; text-transform: uppercase; letter-spacing: .06em; margin-bottom: 6px; }
+  .pos-val { font-size: 36px; font-weight: 700; letter-spacing: -1.5px; }
+  .pos-val.up { color: #5DCAA5; }
+  .pos-val.dn { color: #F09595; }
+  .delta { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; padding: 4px 10px; border-radius: 6px; margin-top: 8px; }
+  .delta.up { background: rgba(29,158,117,.25); color: #9FE1CB; }
+  .delta.dn { background: rgba(226,75,74,.25); color: #F7C1C1; }
+  .delta.fl { background: rgba(255,255,255,.1); color: rgba(255,255,255,.7); }
+  .meta-grid { display: flex; gap: 2rem; flex-wrap: wrap; }
+  .mi .ml { font-size: 11px; opacity: .55; margin-bottom: 3px; }
+  .mi .mv { font-size: 15px; font-weight: 600; }
+  .mi .mv.up { color: #5DCAA5; }
+  .mi .mv.dn { color: #F09595; }
+
+  /* SECTIONS */
+  .sec { font-size: 11px; font-weight: 600; color: var(--text3); text-transform: uppercase; letter-spacing: .07em; margin-bottom: .75rem; display: flex; align-items: center; gap: 10px; }
+  .sec::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+  /* GRIDS */
+  .g2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1.25rem; }
+  .g3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin-bottom: 1.25rem; }
+  .g4 { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: .75rem; margin-bottom: 1.25rem; }
+  .g6 { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: .75rem; margin-bottom: 1.25rem; }
+
+  /* CARDS */
+  .card { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 1.1rem 1.25rem; }
+  .card-title { font-size: 12px; font-weight: 600; color: var(--text2); margin-bottom: 12px; display: flex; align-items: center; gap: 6px; }
+
+  /* METRIC CARD */
+  .mc { background: var(--gray-h); border-radius: var(--radius); padding: .9rem 1rem; }
+  .mc .ml { font-size: 11px; color: var(--text3); margin-bottom: 5px; }
+  .mc .mv { font-size: 18px; font-weight: 700; color: var(--text); }
+  .mc .ms { font-size: 11px; color: var(--text3); margin-top: 3px; }
+  .mc .tag { font-size: 10px; padding: 2px 7px; border-radius: 4px; margin-top: 6px; display: inline-block; font-weight: 500; }
+  .tok  { background: var(--teal-l); color: var(--teal); }
+  .twarn{ background: var(--amber-l); color: var(--amber); }
+  .tbad { background: var(--red-l); color: var(--red); }
+
+  /* ROW ITEMS */
+  .ri { display: flex; align-items: center; justify-content: space-between; padding: 7px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
+  .ri:last-child { border-bottom: none; }
+  .rl { color: var(--text2); flex: 1; display: flex; align-items: center; gap: 6px; }
+  .bdot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .rbar { flex: 0 0 80px; margin: 0 12px; height: 5px; background: var(--gray-h); border-radius: 3px; overflow: hidden; }
+  .rbf  { height: 100%; border-radius: 3px; }
+  .rv   { font-weight: 600; color: var(--text); text-align: right; min-width: 80px; font-size: 12px; }
+
+  /* WATERFALL */
+  .wfr { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; font-size: 12px; }
+  .wfl { flex: 0 0 170px; color: var(--text2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .wfa { flex: 1; height: 20px; }
+  .wfb { height: 100%; border-radius: 4px; display: flex; align-items: center; padding: 0 8px; font-size: 11px; font-weight: 600; white-space: nowrap; min-width: 60px; }
+  .wp { background: var(--teal-l); color: var(--teal); }
+  .wn { background: var(--red-l); color: var(--red); }
+  .wt { background: var(--gray-h); color: var(--text); border: 1px solid var(--border); }
+  .wf-divider { border: none; border-top: 1px solid var(--border); margin: 8px 0 6px; }
+
+  /* ALERTS */
+  .ab { display: flex; align-items: flex-start; gap: 10px; padding: 11px 14px; margin-bottom: 8px; font-size: 13px; border-radius: 0; }
+  .aw { background: var(--amber-l); color: var(--amber); border-left: 3px solid #EF9F27; }
+  .ao { background: var(--teal-l);  color: var(--teal);  border-left: 3px solid #1D9E75; }
+  .ae { background: var(--red-l);   color: var(--red);   border-left: 3px solid #E24B4A; }
+  .ab-icon { font-size: 16px; flex-shrink: 0; margin-top: 1px; }
+
+  /* FOOTER */
+  .footer { text-align: center; font-size: 11px; color: var(--text3); margin-top: 2rem; padding-top: 1.5rem; border-top: 1px solid var(--border); }
+
+  /* HIDDEN */
+  .hidden { display: none !important; }
+
+  @media (max-width: 700px) {
+    .g2, .g3 { grid-template-columns: 1fr; }
+    .banner { flex-direction: column; }
+    .top-bar { padding: 0 1rem; }
+    .main { padding: 1rem; }
+    .wfl { flex: 0 0 120px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="top-bar">
+  <h1>🐟 Dashboard Financiero <span>Pesquera</span></h1>
+  <div class="top-badges">
+    <span class="badge" id="tc-badge" style="display:none"></span>
+    <span class="badge" id="fecha-badge"></span>
+  </div>
+</div>
+
+<div class="main">
+
+  <!-- UPLOAD -->
+  <div class="upload-zone" id="drop-zone">
+    <div class="icon">📊</div>
+    <h2>Subí el Excel de posición financiera</h2>
+    <p>Arrastrá el archivo <strong>dashboard_financiero_pesquera_v5.xlsx</strong> acá,<br>o hacé clic para seleccionarlo desde tu computadora.</p>
+    <label class="upload-btn">
+      Seleccionar archivo .xlsx
+      <input type="file" accept=".xlsx" id="file-input" style="display:none">
+    </label>
+    <p class="upload-hint">Hoja requerida: <code>CARGA_DIARIA</code> · 36 columnas · una fila por día · versión V5</p>
+  </div>
+
+  <div class="status" id="status-msg"></div>
+
+  <div id="dash-content" class="hidden">
+
+    <!-- BANNER -->
+    <div class="banner">
+      <div>
+        <div class="pos-lbl">Posición financiera neta</div>
+        <div class="pos-val up" id="pos-neta">–</div>
+        <div id="pos-delta" class="delta fl">–</div>
+      </div>
+      <div class="meta-grid">
+        <div class="mi"><div class="ml">Activo total</div><div class="mv up" id="m-activo">–</div></div>
+        <div class="mi"><div class="ml">Gastos del día</div><div class="mv dn" id="m-gastos">–</div></div>
+        <div class="mi"><div class="ml">Pasivo corriente</div><div class="mv dn" id="m-pasivo">–</div></div>
+        <div class="mi"><div class="ml">Cobertura</div><div class="mv" id="m-cob">–</div></div>
+        <div class="mi"><div class="ml">Última carga</div><div class="mv" id="m-fecha">–</div></div>
+      </div>
+    </div>
+
+    <!-- ACTIVO -->
+    <div class="sec">Activo corriente</div>
+    <div class="g4" id="activo-cards"></div>
+
+    <!-- BANCOS + DIVISAS -->
+    <div class="g2">
+      <div class="card">
+        <div class="card-title">🏦 Saldos bancarios (USD)</div>
+        <div id="banks-list"></div>
+        <div class="ri" style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border);border-bottom:none">
+          <span class="rl" style="font-weight:600;color:var(--text)">Total bancos</span>
+          <span class="rv" id="banks-total">–</span>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">💵 Divisas y créditos exterior</div>
+        <div id="divisas-detail"></div>
+      </div>
+    </div>
+
+    <!-- GASTOS -->
+    <div class="sec">Gastos del día por sector</div>
+    <div class="g2">
+      <div class="card" style="padding:.9rem 1rem">
+        <div id="gastos-list"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">Distribución de egresos</div>
+        <div style="position:relative;width:100%;height:210px">
+          <canvas id="cGastos" role="img" aria-label="Distribución de gastos por sector">Gastos por sector.</canvas>
+        </div>
+        <div id="leg-gastos" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px"></div>
+      </div>
+    </div>
+
+    <!-- WATERFALL -->
+    <div class="sec">Composición de la posición neta</div>
+    <div class="card" style="margin-bottom:1.25rem">
+      <div id="waterfall"></div>
+    </div>
+
+    <!-- PASIVO -->
+    <div class="sec">Pasivo corriente</div>
+    <div class="g6" id="pasivo-cards" style="margin-bottom:1.25rem"></div>
+
+    <!-- HISTORICO -->
+    <div class="sec">Evolución histórica — posición neta (USD)</div>
+    <div class="card" style="margin-bottom:1.25rem">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+        <span style="font-size:12px;color:var(--text3)" id="hist-sub">–</span>
+        <div style="display:flex;gap:12px">
+          <span style="font-size:11px;display:flex;align-items:center;gap:5px"><span style="width:12px;height:3px;background:#1D9E75;display:inline-block;border-radius:2px"></span>Posición neta</span>
+          <span style="font-size:11px;display:flex;align-items:center;gap:5px"><span style="width:12px;height:3px;background:#378ADD;display:inline-block;border-radius:2px;opacity:.7"></span>Activo total</span>
+          <span style="font-size:11px;display:flex;align-items:center;gap:5px"><span style="width:12px;height:3px;background:#E24B4A;display:inline-block;border-radius:2px;opacity:.7"></span>Pasivo</span>
+        </div>
+      </div>
+      <div style="position:relative;width:100%;height:220px">
+        <canvas id="cHist" role="img" aria-label="Evolución histórica posición financiera">Tendencia histórica.</canvas>
+      </div>
+    </div>
+
+    <!-- ALERTAS -->
+    <div class="sec">Alertas automáticas</div>
+    <div id="alertas" style="margin-bottom:1.5rem"></div>
+
+  </div><!-- /dash-content -->
+
+  <div class="footer">
+    Dashboard financiero · Empresa Pesquera · Datos en USD · Actualización manual diaria
+  </div>
+
+</div><!-- /main -->
+
+<script>
+// ── Utilidades ──────────────────────────────────────────────────────────────
+const usd = v => {
+  if (v == null || isNaN(v)) return '–';
+  const a = Math.abs(v), s = v < 0 ? '-' : '';
+  if (a >= 1e6) return s + 'USD ' + (a/1e6).toLocaleString('es-AR',{minimumFractionDigits:2,maximumFractionDigits:2}) + 'M';
+  if (a >= 1000) return s + 'USD ' + Math.round(a/1000).toLocaleString('es-AR') + 'k';
+  return s + 'USD ' + Math.round(a).toLocaleString('es-AR');
+};
+const num = (v, d=2) => Number(v).toLocaleString('es-AR',{minimumFractionDigits:d,maximumFractionDigits:d});
+const n = v => { const x = parseFloat(v); return isNaN(x) ? 0 : x; };
+
+let cG = null, cH = null;
+function killCharts() { [cG,cH].forEach(c => { if(c) c.destroy(); }); cG = cH = null; }
+
+function showStatus(msg, type) {
+  const el = document.getElementById('status-msg');
+  el.className = 'status ' + type;
+  el.innerHTML = msg;
+}
+
+function toDate(v) {
+  if (v instanceof Date) return v;
+  if (typeof v === 'string') return new Date(v);
+  if (typeof v === 'number') return new Date((v - 25569) * 86400 * 1000);
+  return null;
+}
+
+// ── Parser Excel ─────────────────────────────────────────────────────────────
+// Mapa columnas V5 (0-based):
+// 0=Fecha, 1=TC, 2=Efectivo, 3=ChqCartera, 4=BPat, 5=BGal, 6=BFran, 7=BSant,
+// 8=CreditosMI, 9-22=Gastos(14), 23=ChqEmit, 24=GsPres, 25=PrestML, 26=DeuProvMI,
+// 27=DeuProvExt(USD), 28=PrestME(USD), 29=IntProy(USD), 30=OtrasDeudas(USD),
+// 31=Stock(USD), 32=PosFiscal(ARS), 33=Divisas(ARS), 34=CredExt(ARS), 35=FCI(ARS)
+function parseRows(wb) {
+  const shName = wb.SheetNames.find(s => s.toUpperCase().includes('CARGA'));
+  if (!shName) throw new Error('No encontré la hoja CARGA_DIARIA.');
+  const ws = wb.Sheets[shName];
+  const raw = XLSX.utils.sheet_to_json(ws, {header:1, raw:true, defval:null});
+  const hdrRow = raw.findIndex(r => r && r[0] && String(r[0]).toLowerCase().includes('fecha'));
+  if (hdrRow < 0) throw new Error('No encontré la fila de encabezados.');
+  const rows = [];
+  for (let i = hdrRow+1; i < raw.length; i++) {
+    const r = raw[i];
+    if (!r || r[0] == null) continue;
+    const date = toDate(r[0]);
+    if (!date || isNaN(date)) continue;
+    const tc = n(r[1]) || 1;
+    rows.push({
+      date, tc,
+      efectivo: n(r[2]), chq_cart: n(r[3]),
+      b_pat: n(r[4]), b_gal: n(r[5]), b_fran: n(r[6]), b_sant: n(r[7]),
+      cred_mi: n(r[8]),
+      g_prov: n(r[9]),  g_aran: n(r[10]), g_comex: n(r[11]), g_dir: n(r[12]),
+      g_grp:  n(r[13]), g_buq:  n(r[14]), g_imp:   n(r[15]), g_rrhh: n(r[16]),
+      g_serv: n(r[17]), g_ret:  n(r[18]), g_import:n(r[19]), g_ccl:  n(r[20]),
+      g_pprest:n(r[21]),g_otros:n(r[22]),
+      p_chq_emit:n(r[23]), p_gs_pres:n(r[24]), p_prest_ml:n(r[25]), p_deu_mi:n(r[26]),
+      p_deu_ext: n(r[27]), p_prest_me:n(r[28]), p_int:n(r[29]), p_otras:n(r[30]),
+      stock:  n(r[31]),
+      fiscal: n(r[32]), divisas:n(r[33]), cred_ext:n(r[34]), fci:n(r[35]),
+    });
+  }
+  if (!rows.length) throw new Error('No hay filas con datos válidos en CARGA_DIARIA.');
+  rows.sort((a,b) => a.date - b.date);
+  return rows;
+}
+
+function calc(r) {
+  const u = v => v / r.tc;
+  const bancos_ars = r.b_pat + r.b_gal + r.b_fran + r.b_sant;
+  const activo  = u(r.efectivo + r.chq_cart + bancos_ars + r.cred_mi + r.fiscal + r.divisas + r.cred_ext + r.fci) + r.stock;
+  const gastos  = u(r.g_prov + r.g_aran + r.g_comex + r.g_dir + r.g_grp + r.g_buq + r.g_imp + r.g_rrhh + r.g_serv + r.g_ret + r.g_import + r.g_ccl + r.g_pprest + r.g_otros);
+  const pasivo  = u(r.p_chq_emit + r.p_gs_pres + r.p_prest_ml + r.p_deu_mi) + r.p_deu_ext + r.p_prest_me + r.p_int + r.p_otras;
+  const pos_neta = activo - gastos - pasivo;
+  return {
+    activo, gastos, pasivo, pos_neta,
+    bancos:   u(bancos_ars),
+    b_pat:    u(r.b_pat), b_gal:  u(r.b_gal), b_fran: u(r.b_fran), b_sant: u(r.b_sant),
+    efectivo: u(r.efectivo), chq_cart: u(r.chq_cart), cred_mi: u(r.cred_mi),
+    divisas:  u(r.divisas), cred_ext: u(r.cred_ext), fci: u(r.fci),
+    fiscal:   u(r.fiscal), stock: r.stock,
+    g_prov:   u(r.g_prov), g_buq:  u(r.g_buq), g_rrhh:  u(r.g_rrhh),
+    g_comex:  u(r.g_comex), g_imp: u(r.g_imp), g_pprest: u(r.g_pprest),
+    g_otros_tot: u(r.g_aran + r.g_dir + r.g_grp + r.g_serv + r.g_ret + r.g_import + r.g_ccl + r.g_otros),
+    p_chq:    u(r.p_chq_emit), p_pres: u(r.p_gs_pres),
+    p_deu_mi: u(r.p_deu_mi),   p_prest_ml: u(r.p_prest_ml),
+    p_deu_ext: r.p_deu_ext, p_prest_me: r.p_prest_me, p_int: r.p_int, p_otras: r.p_otras,
+  };
+}
+
+// ── Render ───────────────────────────────────────────────────────────────────
+function render(rows) {
+  const today = rows[rows.length - 1];
+  const prev  = rows.length > 1 ? rows[rows.length - 2] : null;
+  const c = calc(today), cp = prev ? calc(prev) : null;
+
+  // Header badges
+  document.getElementById('tc-badge').textContent = 'TC BNA: $' + num(today.tc, 2);
+  document.getElementById('tc-badge').style.display = 'block';
+  document.getElementById('fecha-badge').textContent = today.date.toLocaleDateString('es-AR', {day:'2-digit',month:'2-digit',year:'numeric'});
+
+  // Banner
+  const pnEl = document.getElementById('pos-neta');
+  pnEl.textContent = usd(c.pos_neta);
+  pnEl.className = 'pos-val ' + (c.pos_neta >= 0 ? 'up' : 'dn');
+
+  const dEl = document.getElementById('pos-delta');
+  if (cp) {
+    const dif = c.pos_neta - cp.pos_neta;
+    const pct = (dif / Math.abs(cp.pos_neta) * 100).toFixed(1);
+    dEl.className = 'delta ' + (dif >= 0 ? 'up' : 'dn');
+    dEl.innerHTML = (dif >= 0 ? '▲' : '▼') + ' ' + (dif >= 0 ? '+' : '') + usd(dif) + ' (' + pct + '%) vs día anterior';
+  } else {
+    dEl.className = 'delta fl'; dEl.textContent = 'Primer día cargado';
+  }
+
+  document.getElementById('m-activo').textContent = usd(c.activo);
+  document.getElementById('m-gastos').textContent = usd(c.gastos);
+  document.getElementById('m-pasivo').textContent = usd(c.pasivo);
+  document.getElementById('m-cob').textContent = c.gastos > 0 ? (c.activo / c.gastos).toFixed(1) + ' días' : '–';
+  document.getElementById('m-fecha').textContent = today.date.toLocaleDateString('es-AR', {day:'numeric', month:'long'});
+
+  // Activo cards
+  const activoCards = [
+    {icon:'💵', lbl:'Efectivo (MI)',      val:usd(c.efectivo),  sub:'Ventas mercado interno'},
+    {icon:'📄', lbl:'Cheques en cartera', val:usd(c.chq_cart), sub:'A acreditar'},
+    {icon:'📋', lbl:'Créditos MI',        val:usd(c.cred_mi),  sub:'Facturas pendientes'},
+    {icon:'📦', lbl:'Stock precio venta', val:usd(c.stock),    sub:'Ya en USD'},
+    {icon:'📑', lbl:'Posición fiscal',    val:usd(c.fiscal),   sub:'Crédito fiscal'},
+    {icon:'📈', lbl:'Inversiones FCI',    val:usd(c.fci),      sub:'No disp. c/p', tag:'Largo plazo', tagC:'twarn'},
+  ];
+  document.getElementById('activo-cards').innerHTML = activoCards.map(a =>
+    `<div class="mc"><div class="ml">${a.icon} ${a.lbl}</div><div class="mv">${a.val}</div><div class="ms">${a.sub}</div>${a.tag ? `<div class="tag ${a.tagC}">${a.tag}</div>` : ''}</div>`
+  ).join('');
+
+  // Bancos
+  const bColors = ['#1D9E75','#378ADD','#BA7517','#E24B4A'];
+  const bNames  = ['Patagonia','Galicia','Francés','Santander'];
+  const bVals   = [c.b_pat, c.b_gal, c.b_fran, c.b_sant];
+  const maxB    = Math.max(...bVals, 1);
+  document.getElementById('banks-list').innerHTML = bNames.map((nm, i) =>
+    `<div class="ri">
+      <span class="rl"><span class="bdot" style="background:${bColors[i]}"></span>${nm}</span>
+      <div class="rbar"><div class="rbf" style="width:${Math.round(bVals[i]/maxB*100)}%;background:${bColors[i]}"></div></div>
+      <span class="rv">${usd(bVals[i])}</span>
+    </div>`
+  ).join('');
+  document.getElementById('banks-total').textContent = usd(c.bancos);
+
+  // Divisas
+  document.getElementById('divisas-detail').innerHTML = `
+    <div class="ri"><span class="rl">Divisas disponibles (ARS→USD)</span><span class="rv" style="color:var(--teal)">${usd(c.divisas)}</span></div>
+    <div class="ri"><span class="rl">Créditos exterior (ARS→USD)</span><span class="rv" style="color:var(--teal)">${usd(c.cred_ext)}</span></div>
+    <div class="ri" style="border-top:1px solid var(--border);margin-top:4px">
+      <span class="rl" style="font-weight:600;color:var(--text)">Total divisas + créditos</span>
+      <span class="rv" style="color:var(--teal);font-weight:600">${usd(c.divisas + c.cred_ext)}</span>
+    </div>
+    <div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--border)">
+      <div style="font-size:11px;color:var(--text3);margin-bottom:3px">Tipo de cambio BNA del día</div>
+      <div style="font-size:18px;font-weight:700;color:var(--text)">$${num(today.tc, 2)} <span style="font-size:12px;font-weight:400;color:var(--text3)">ARS/USD</span></div>
+    </div>`;
+
+  // Gastos
+  const gastosData = [
+    {name:'Proveedores',   val:c.g_prov,      color:'#E24B4A'},
+    {name:'RRHH',          val:c.g_rrhh,      color:'#378ADD'},
+    {name:'Gastos buques', val:c.g_buq,       color:'#EF9F27'},
+    {name:'Comercio ext.', val:c.g_comex,     color:'#1D9E75'},
+    {name:'Impuestos',     val:c.g_imp,       color:'#7F77DD'},
+    {name:'Pago préstamos',val:c.g_pprest,    color:'#D4537E'},
+    {name:'Otros',         val:c.g_otros_tot, color:'#888780'},
+  ].filter(g => g.val > 0).sort((a,b) => b.val - a.val);
+  const totG = gastosData.reduce((s,g) => s+g.val, 0) || 1;
+  const maxG = gastosData[0]?.val || 1;
+  document.getElementById('gastos-list').innerHTML = gastosData.map(g =>
+    `<div class="ri">
+      <span class="rl">${g.name}</span>
+      <div class="rbar"><div class="rbf" style="width:${Math.round(g.val/maxG*100)}%;background:${g.color}"></div></div>
+      <span class="rv">${usd(g.val)}</span>
+    </div>`
+  ).join('');
+
+  if (cG) cG.destroy();
+  cG = new Chart(document.getElementById('cGastos'), {
+    type: 'doughnut',
+    data: { labels: gastosData.map(g=>g.name), datasets:[{ data: gastosData.map(g=>g.val), backgroundColor: gastosData.map(g=>g.color), borderWidth:2, borderColor:'transparent', hoverOffset:4 }]},
+    options: { responsive:true, maintainAspectRatio:false, cutout:'65%', plugins:{ legend:{display:false}, tooltip:{ callbacks:{ label: ctx => ' '+usd(ctx.raw)+' ('+Math.round(ctx.raw/totG*100)+'%)' }}}}
+  });
+  document.getElementById('leg-gastos').innerHTML = gastosData.map(g =>
+    `<span style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--text3)"><span style="width:8px;height:8px;border-radius:2px;background:${g.color};flex-shrink:0"></span>${g.name} ${Math.round(g.val/totG*100)}%</span>`
+  ).join('');
+
+  // Waterfall
+  const wfItems = [
+    {lbl:'Efectivo + cheques MI', val:c.efectivo+c.chq_cart, t:'pos'},
+    {lbl:'Bancos (4)',            val:c.bancos,               t:'pos'},
+    {lbl:'Créditos MI',          val:c.cred_mi,              t:'pos'},
+    {lbl:'Divisas disponibles',  val:c.divisas,              t:'pos'},
+    {lbl:'Créditos exterior',    val:c.cred_ext,             t:'pos'},
+    {lbl:'Stock a precio venta', val:c.stock,                t:'pos'},
+    {lbl:'Posición fiscal',      val:c.fiscal,               t:'pos'},
+    {lbl:'FCI (inversiones)',    val:c.fci,                  t:'pos'},
+    {lbl:'Gastos del día',       val:c.gastos,               t:'neg'},
+    {lbl:'Cheques emitidos',     val:c.p_chq,                t:'neg'},
+    {lbl:'Gs. presupuestados',   val:c.p_pres,               t:'neg'},
+    {lbl:'Deuda proveed. MI',    val:c.p_deu_mi,             t:'neg'},
+    {lbl:'Préstamos ML',         val:c.p_prest_ml,           t:'neg'},
+    {lbl:'Deuda proveed. ext.',  val:c.p_deu_ext,            t:'neg'},
+    {lbl:'Préstamos ME',         val:c.p_prest_me,           t:'neg'},
+    {lbl:'Intereses proyect.',   val:c.p_int,                t:'neg'},
+    {lbl:'Otras deudas',         val:c.p_otras,              t:'neg'},
+  ].filter(i => i.val > 0);
+  const maxWF = Math.max(...wfItems.map(i => i.val), 1);
+  document.getElementById('waterfall').innerHTML =
+    wfItems.map(i =>
+      `<div class="wfr">
+        <div class="wfl">${i.lbl}</div>
+        <div class="wfa"><div class="wfb ${i.t==='pos'?'wp':'wn'}" style="width:${Math.max(Math.round(i.val/maxWF*90),8)}%">${i.t==='pos'?'+':'−'}${usd(i.val)}</div></div>
+      </div>`
+    ).join('') +
+    `<hr class="wf-divider">
+    <div class="wfr">
+      <div class="wfl" style="font-weight:700;color:var(--text)">Posición neta final</div>
+      <div class="wfa"><div class="wfb wt" style="width:55%;min-width:80px;font-size:13px">${usd(c.pos_neta)}</div></div>
+    </div>`;
+
+  // Pasivo
+  document.getElementById('pasivo-cards').innerHTML = [
+    {icon:'📄', lbl:'Cheques emitidos',    val:usd(c.p_chq),      sub:'Próximos a vencer'},
+    {icon:'📅', lbl:'Gs. presupuestados',  val:usd(c.p_pres),     sub:'A la vista', tag:'Estimado', tagC:'twarn'},
+    {icon:'🚚', lbl:'Deuda proveed. MI',   val:usd(c.p_deu_mi),   sub:'ARS → USD'},
+    {icon:'🌎', lbl:'Deuda proveed. ext.', val:usd(c.p_deu_ext),  sub:'Ya en USD'},
+    {icon:'🏢', lbl:'Préstamos ML',        val:usd(c.p_prest_ml), sub:'ARS → USD'},
+    {icon:'💳', lbl:'Préstamos ME',        val:usd(c.p_prest_me), sub:'Ya en USD'},
+    {icon:'📊', lbl:'Intereses proy.',     val:usd(c.p_int),      sub:'Ya en USD'},
+    {icon:'📌', lbl:'Otras deudas',        val:usd(c.p_otras),    sub:'Ya en USD'},
+  ].map(a =>
+    `<div class="mc"><div class="ml">${a.icon} ${a.lbl}</div><div class="mv" style="color:var(--red)">${a.val}</div><div class="ms">${a.sub}</div>${a.tag ? `<div class="tag ${a.tagC}">${a.tag}</div>` : ''}</div>`
+  ).join('');
+
+  // Histórico
+  const labels = rows.map(r => r.date.toLocaleDateString('es-AR', {day:'2-digit', month:'2-digit'}));
+  const posD = rows.map(r => Math.round(calc(r).pos_neta));
+  const actD = rows.map(r => Math.round(calc(r).activo));
+  const pasD = rows.map(r => Math.round(calc(r).pasivo));
+  document.getElementById('hist-sub').textContent = rows.length + ' día' + (rows.length===1?'':'s') + ' cargado' + (rows.length===1?'':'s');
+  if (cH) cH.destroy();
+  cH = new Chart(document.getElementById('cHist'), {
+    type: 'line',
+    data: { labels, datasets: [
+      {label:'Posición neta', data:posD, borderColor:'#1D9E75', borderWidth:2.5, pointRadius:rows.length<=20?3:0, tension:0.3, fill:false},
+      {label:'Activo total',  data:actD, borderColor:'#378ADD', borderWidth:1.5, borderDash:[5,3], pointRadius:0, tension:0.3, fill:false},
+      {label:'Pasivo',        data:pasD, borderColor:'#E24B4A', borderWidth:1.5, borderDash:[2,4], pointRadius:0, tension:0.3, fill:false},
+    ]},
+    options: {
+      responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{display:false} },
+      scales:{
+        x:{ grid:{display:false}, ticks:{ font:{size:10}, maxTicksLimit:14 }},
+        y:{ grid:{color:'rgba(0,0,0,0.05)'}, ticks:{ font:{size:10}, callback: v => 'USD '+Math.round(Math.abs(v)/1000)+'k' }}
+      }
+    }
+  });
+
+  // Alertas
+  const cob = c.gastos > 0 ? c.activo / c.gastos : 99;
+  const ratio = c.activo > 0 ? c.pasivo / c.activo : 0;
+  const alerts = [];
+  if (cob < 3)      alerts.push({cls:'ae', msg:`<strong>⚠ Cobertura crítica:</strong> el activo cubre solo ${cob.toFixed(1)} días de gastos. Acción urgente requerida.`});
+  else if (cob < 7) alerts.push({cls:'aw', msg:`<strong>Cobertura ajustada:</strong> ${cob.toFixed(1)} días. Evaluar liquidación de divisas o cobro anticipado.`});
+  else              alerts.push({cls:'ao', msg:`<strong>✓ Cobertura sólida:</strong> el activo cubre ${cob.toFixed(1)} días de gastos al ritmo actual.`});
+  if (cp) {
+    const dif = c.pos_neta - cp.pos_neta;
+    if (dif < 0) alerts.push({cls:'aw', msg:`<strong>Caída en la posición:</strong> bajó ${usd(Math.abs(dif))} respecto al día anterior.`});
+    else         alerts.push({cls:'ao', msg:`<strong>✓ Mejora en la posición:</strong> subió ${usd(dif)} respecto al día anterior.`});
+  }
+  if (ratio > 0.8)      alerts.push({cls:'ae', msg:`<strong>⚠ Apalancamiento alto:</strong> el pasivo representa el ${Math.round(ratio*100)}% del activo total.`});
+  else if (ratio > 0.6) alerts.push({cls:'aw', msg:`<strong>Apalancamiento moderado:</strong> el pasivo es el ${Math.round(ratio*100)}% del activo.`});
+  document.getElementById('alertas').innerHTML = alerts.map(a =>
+    `<div class="ab ${a.cls}"><div>${a.msg}</div></div>`
+  ).join('');
+
+  document.getElementById('dash-content').classList.remove('hidden');
+  document.title = 'Posición: ' + usd(c.pos_neta) + ' · Dashboard Pesquera';
+}
+
+// ── File handling ─────────────────────────────────────────────────────────────
+function processFile(file) {
+  if (!file || !file.name.endsWith('.xlsx')) { showStatus('❌ El archivo debe ser .xlsx', 'err'); return; }
+  showStatus('⏳ Leyendo archivo...', 'load');
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      killCharts();
+      const wb = XLSX.read(e.target.result, {type:'array', cellDates:true});
+      const rows = parseRows(wb);
+      render(rows);
+      showStatus(`✅ Cargado correctamente — ${rows.length} día${rows.length===1?'':'s'} procesado${rows.length===1?'':'s'}`, 'ok');
+    } catch(err) {
+      showStatus('❌ Error: ' + err.message, 'err');
+      document.getElementById('dash-content').classList.add('hidden');
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+document.getElementById('file-input').addEventListener('change', e => processFile(e.target.files[0]));
+const dz = document.getElementById('drop-zone');
+dz.addEventListener('dragover',  e => { e.preventDefault(); dz.classList.add('over'); });
+dz.addEventListener('dragleave', () => dz.classList.remove('over'));
+dz.addEventListener('drop', e => { e.preventDefault(); dz.classList.remove('over'); processFile(e.dataTransfer.files[0]); });
+
+document.getElementById('fecha-badge').textContent = new Date().toLocaleDateString('es-AR', {day:'2-digit', month:'2-digit', year:'numeric'});
+</script>
+</body>
+</html>
